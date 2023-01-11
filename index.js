@@ -1,7 +1,7 @@
 "use strict";
 
-import { WIDTH, HEIGHT } from "./constants/constants.js";
-import Scene from "./scenes/Scene.js";
+import { WIDTH, HEIGHT } from "./src/constants/constants.js";
+import Scene from "./src/scenes/Scene.js";
 
 var config = {
   type: Phaser.AUTO,

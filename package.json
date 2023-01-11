@@ -5,7 +5,13 @@
   "repository": "https://github.com/Victorm0612/Dead-World.git",
   "author": "Victorm0612 <victor.manuel.vargas@correounivalle.edu.co>",
   "license": "MIT",
+  "scripts": {
+    "dev": "lite-server"
+  },
   "dependencies": {
     "phaser": "^3.55.2"
+  },
+  "devDependencies": {
+    "lite-server": "^2.6.1"
   }
 }
