@@ -1,0 +1,11 @@
+{
+  "name": "dead-world",
+  "version": "1.0.0",
+  "main": "index.js",
+  "repository": "https://github.com/Victorm0612/Dead-World.git",
+  "author": "Victorm0612 <victor.manuel.vargas@correounivalle.edu.co>",
+  "license": "MIT",
+  "dependencies": {
+    "phaser": "^3.55.2"
+  }
+}
