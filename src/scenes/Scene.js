@@ -6,7 +6,8 @@ export default class Scene extends Phaser.Scene {
   constructor() {
     super('init');
     this.score = 0;
-    this.isLoading = true;
+    this.isInitialState = true;
+    this.isJumping = false;
 
   }
   preload() {
@@ -28,7 +29,11 @@ export default class Scene extends Phaser.Scene {
       frameWidth: 48,
       frameHeight: 48
     });
-    this.load.spritesheet('player_hurt', 'assets/img/soldiers/Biker/Biker_hurt.png', {
+    this.load.spritesheet('player_stop', 'assets/img/soldiers/Biker/Biker_idle.png', {
+      frameWidth: 48,
+      frameHeight: 48
+    });
+    this.load.spritesheet('player_jump', 'assets/img/soldiers/Biker/Biker_jump.png', {
       frameWidth: 48,
       frameHeight: 48
     });
@@ -50,11 +55,14 @@ export default class Scene extends Phaser.Scene {
 
 
   create() {
+    // Set controls
+    this.cursors = this.input.keyboard.createCursorKeys();
+
     // Set background
     this.background = this.add.sprite(WIDTH / 2, 320, 'background');
     this.background.setScale(.7);
 
-    // Set first zombie
+    // Zombie
     this.zombieMan = this.physics.add.sprite(WIDTH + 100, 500, "zombie_man");
     this.zombieMan
       .setScale(2)
@@ -69,18 +77,36 @@ export default class Scene extends Phaser.Scene {
     this.zombieMan.play("zombie_man_anim");
 
 
-    // Set player
-    this.player = this.physics.add.sprite(-100, 520, 'player');
+    // Player
+    this.player = this.physics.add.sprite(-100, HEIGHT, 'player');
     this.player
-      .setScale(3)
-      .body.allowGravity = false;
+      .setScale(3.2)
+      .setCollideWorldBounds(true);
+
+    // animations - Player
     this.anims.create({
-      key: 'player_anim',
+      key: 'player_walk_anim',
       frames: this.anims.generateFrameNumbers('player'),
       frameRate: 16,
       repeat: -1
     });
-    this.player.play('player_anim');
+
+    this.anims.create({
+      key: 'player_stop_anim',
+      frames: this.anims.generateFrameNumbers('player_stop'),
+      frameRate: 16,
+      repeat: -1
+    });    
+
+    this.anims.create({
+      key: 'player_jump_anim',
+      frames: this.anims.generateFrameNumbers('player_jump'),
+      frameRate: 5,
+      repeat: 1,
+      hideOnComplete: true
+    });
+
+    this.player.play('player_walk_anim');
 
     // music
     this.soundtrack = this.sound.add('soundtrack');
@@ -98,24 +124,20 @@ export default class Scene extends Phaser.Scene {
   }
 
   update() {
-    if (this.player.x === 100) {
-      if (this.isLoading) {
+    if(this.isInitialState) {
+      if (this.player.x >= 100) {
         this.player.x = 100;
-        this.player.destroy();
-        this.player = this.physics.add.sprite(100, 520, 'player_hurt', 0);
-        this.player
-          .setScale(3)
-          .body.allowGravity = false;
+        this.stop();
         this.showInitialDialog();
+      } else {
+        this.player.x += 2;
       }
     } else {
-      this.player.x += 2;
-    }
-
-    if (this.isLoading) return;
-    this.zombieMan.x -= 2;
-    if (this.zombieMan.x < 0) {
-      this.zombieMan.destroy();
+      this.setupControls();
+      this.zombieMan.x -= 2;
+      if (this.zombieMan.x < 0) {
+        this.zombieMan.destroy();
+      }
     }
   }
 
@@ -125,8 +147,53 @@ export default class Scene extends Phaser.Scene {
       this.text.setText('¡Debo encontrarlos, cueste lo que cueste!');
     }, 2000);
     setTimeout(() => {
-      this.isLoading = false;
+      this.isInitialState = false;
       this.text.setVisible(false);
     }, 3500);
+  }
+
+  setupControls() {
+    if (this.cursors.left.isDown) {
+      this.run();
+    }
+    else if (this.cursors.right.isDown) {
+      this.run(false);
+    }
+    else if (this.isJumping) {
+      if (this.player.anims.getFrameName() === 3) {
+        // jump animation is over
+        this.isJumping = false;
+        this.player.play('player_stop_anim');
+      }
+    }
+    else if (this.cursors.up.isDown) {
+      this.jump();
+    }
+    else {
+      this.stop();
+    }
+  }
+
+  jump() {
+    this.isJumping = true;
+    if (this.player.anims.getName() !== 'player_jump_anim') {
+      this.player.play('player_jump_anim');
+    }
+    this.player.setVelocityY(-800);
+  }
+
+  run(isLeft = true) {
+    if (this.player.anims.getName() !== 'player_walk_anim') {
+      this.player.play('player_walk_anim');
+    }
+    this.player.setFlipX(isLeft);
+    this.player.setVelocityX(isLeft ? -300 : 300);
+  }
+
+  stop() {
+    this.player.setVelocity(0,0);
+    if (this.player.anims.getName() !== 'player_stop_anim') {
+      this.player.play('player_stop_anim');
+    }
   }
 }
