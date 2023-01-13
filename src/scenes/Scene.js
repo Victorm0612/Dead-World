@@ -15,6 +15,7 @@ export default class Scene extends Phaser.Scene {
 
     // Background
     this.load.image('background', 'assets/img/background/War2/Bright/War2.png');
+    this.load.image('floor', 'assets/img/background/War2/Bright/road.png');
 
     // Main character
 
@@ -58,31 +59,66 @@ export default class Scene extends Phaser.Scene {
     // Set controls
     this.cursors = this.input.keyboard.createCursorKeys();
 
+    this.createSprites();
+    this.adjustSpriteProperties();
+    this.createAnimations();
+
+    this.playAnimation(this.zombieMan, 'zombie_man_anim', true);
+    this.playAnimation(this.player, 'player_walk_anim', true);
+
+    // music
+    this.soundtrack = this.sound.add('soundtrack');
+    if (!this.playing && !this.load.isLoading()) {
+      this.playing = true;
+      this.soundtrack.loop = true;
+      //this.soundtrack.play();
+    }
+
+    // first dialog
+    this.text = this.add.text(30, 50, `¡¿Qué ha sucedido?!\n\n¡¿Dónde está mi esposa y mi hijo?!`, { font: '24px PixelGameFont, monospace' });
+    this.text.setBackgroundColor('black');
+    this.text.setPadding(20, 16);
+    this.text.setVisible(false);
+
+    this.physics.add.collider(this.player, this.floor);
+    this.physics.add.collider(this.zombieMan, this.floor);
+  }
+
+  update() {
+    if(this.isInitialState) {
+      if (this.player.x >= 250) {
+        this.player.x = 250;
+        this.stop();
+        this.showInitialDialog();
+      } else {
+        this.run(false);
+      }
+    } else {
+      this.setupControls();
+      this.zombieMan.x -= 2;
+      if (this.zombieMan.x < 0) {
+        this.zombieMan.destroy();
+      }
+    }
+  }
+
+
+  createSprites() {
     // Set background
     this.background = this.add.sprite(WIDTH / 2, 320, 'background');
-    this.background.setScale(.7);
-
+    
+    // Floor
+    this.floorImg = this.add.tileSprite(WIDTH / 2,  HEIGHT - 45, 0, 0, 'floor');
+    this.floor = this.physics.add.sprite(WIDTH / 2, HEIGHT - 30, 'floor');
+    
     // Zombie
-    this.zombieMan = this.physics.add.sprite(WIDTH + 100, 500, "zombie_man");
-    this.zombieMan
-      .setScale(2)
-      .setFlipX(true)
-      .body.allowGravity = false;
-    this.anims.create({
-      key: 'zombie_man_anim',
-      frames: this.anims.generateFrameNumbers('zombie_man'),
-      frameRate: 16,
-      repeat: -1
-    });
-    this.zombieMan.play("zombie_man_anim");
-
-
+    this.zombieMan = this.physics.add.sprite(WIDTH + 70 , 470, "zombie_man");
+    
     // Player
-    this.player = this.physics.add.sprite(-100, HEIGHT, 'player');
-    this.player
-      .setScale(3.2)
-      .setCollideWorldBounds(true);
+    this.player = this.physics.add.sprite(-100, 490, 'player');
+  }
 
+  createAnimations() {
     // animations - Player
     this.anims.create({
       key: 'player_walk_anim',
@@ -94,7 +130,7 @@ export default class Scene extends Phaser.Scene {
     this.anims.create({
       key: 'player_stop_anim',
       frames: this.anims.generateFrameNumbers('player_stop'),
-      frameRate: 16,
+      frameRate: 10,
       repeat: -1
     });    
 
@@ -106,37 +142,46 @@ export default class Scene extends Phaser.Scene {
       hideOnComplete: true
     });
 
-    this.player.play('player_walk_anim');
-
-    // music
-    this.soundtrack = this.sound.add('soundtrack');
-    if (!this.playing && !this.load.isLoading()) {
-      this.playing = true;
-      this.soundtrack.loop = true;
-      this.soundtrack.play();
-    }
-
-    // first dialog
-    this.text = this.add.text(30, 50, `¡¿Qué ha sucedido?!\n\n¡¿Dónde está mi esposa y mi hijo?!`, { font: '24px PixelGameFont, monospace' });
-    this.text.setBackgroundColor('black');
-    this.text.setPadding(20, 16);
-    this.text.setVisible(false);    
+    // Animations Zombie
+    this.anims.create({
+      key: 'zombie_man_anim',
+      frames: this.anims.generateFrameNumbers('zombie_man'),
+      frameRate: 16,
+      repeat: -1
+    });    
   }
 
-  update() {
-    if(this.isInitialState) {
-      if (this.player.x >= 100) {
-        this.player.x = 100;
-        this.stop();
-        this.showInitialDialog();
-      } else {
-        this.player.x += 2;
-      }
+  adjustSpriteProperties() {
+    // Background
+    this.background.setScale(.7);
+
+    // Floor
+    this.floorImg.setScale(.5);
+    this.floor
+      .setScale(.5)
+      .setAlpha(0)
+      .body
+      .setAllowGravity(false)
+      .setImmovable(true);
+
+    // Zombie
+    this.zombieMan
+      .setScale(2)
+      .setFlipX(true);
+
+
+    // Player
+    this.player
+      .setScale(3.2)
+      .setCollideWorldBounds(true);
+  }
+
+  playAnimation(sprite, key, ignoreActualAnimation = false) {
+    if (ignoreActualAnimation) {
+      sprite.play(key);
     } else {
-      this.setupControls();
-      this.zombieMan.x -= 2;
-      if (this.zombieMan.x < 0) {
-        this.zombieMan.destroy();
+      if (sprite.anims.getName() !== key) {
+        sprite.play(key);
       }
     }
   }
@@ -145,29 +190,30 @@ export default class Scene extends Phaser.Scene {
     this.text.setVisible(true);
     setTimeout(() => {
       this.text.setText('¡Debo encontrarlos, cueste lo que cueste!');
-    }, 2000);
+    }, 2500);
     setTimeout(() => {
       this.isInitialState = false;
       this.text.setVisible(false);
-    }, 3500);
+    }, 2000);
   }
 
   setupControls() {
-    if (this.cursors.left.isDown) {
-      this.run();
-    }
-    else if (this.cursors.right.isDown) {
-      this.run(false);
-    }
-    else if (this.isJumping) {
+    if (this.isJumping) {
+      this.floorImg.tilePositionX += this.player.flipX ? -1.5 : 1.5;
       if (this.player.anims.getFrameName() === 3) {
         // jump animation is over
         this.isJumping = false;
-        this.player.play('player_stop_anim');
+        this.playAnimation(this.player, 'player_stop_anim', true);
       }
     }
     else if (this.cursors.up.isDown) {
       this.jump();
+    }
+    else if (this.cursors.left.isDown) {
+      this.run();
+    }
+    else if (this.cursors.right.isDown) {
+      this.run(false);
     }
     else {
       this.stop();
@@ -176,24 +222,22 @@ export default class Scene extends Phaser.Scene {
 
   jump() {
     this.isJumping = true;
-    if (this.player.anims.getName() !== 'player_jump_anim') {
-      this.player.play('player_jump_anim');
-    }
+    this.playAnimation(this.player, 'player_jump_anim');
     this.player.setVelocityY(-800);
+    if (!this.player.body.velocity.x) { // If x is zero
+      this.player.setVelocityX(this.player.flipX ? -100 : 100);
+    }
   }
 
   run(isLeft = true) {
-    if (this.player.anims.getName() !== 'player_walk_anim') {
-      this.player.play('player_walk_anim');
-    }
+    this.playAnimation(this.player, 'player_walk_anim');
     this.player.setFlipX(isLeft);
     this.player.setVelocityX(isLeft ? -300 : 300);
+    this.floorImg.tilePositionX += isLeft ? -4 : 4;
   }
 
   stop() {
     this.player.setVelocity(0,0);
-    if (this.player.anims.getName() !== 'player_stop_anim') {
-      this.player.play('player_stop_anim');
-    }
+    this.playAnimation(this.player, 'player_stop_anim');
   }
 }
