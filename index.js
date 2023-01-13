@@ -10,6 +10,7 @@ var config = {
   physics: {
     default: 'arcade',
     arcade: {
+      debug: true, //lineas de colisión
       gravity: { y: 3000 }
     }
   },

@@ -8,6 +8,7 @@ export default class Scene extends Phaser.Scene {
     this.score = 0;
     this.isInitialState = true;
     this.isJumping = false;
+    this.isBeingAttacked = false;
 
   }
   preload() {
@@ -24,6 +25,10 @@ export default class Scene extends Phaser.Scene {
       frameWidth: 96,
       frameHeight: 96,
     });
+    this.load.spritesheet('zombie_man_attack', 'assets/img/zombies/zombie_man/Attack_1.png', {
+      frameWidth: 96,
+      frameHeight: 96,
+    });
 
     // Player
     this.load.spritesheet('player', 'assets/img/soldiers/Biker/Biker_run.png', {
@@ -35,6 +40,18 @@ export default class Scene extends Phaser.Scene {
       frameHeight: 48
     });
     this.load.spritesheet('player_jump', 'assets/img/soldiers/Biker/Biker_jump.png', {
+      frameWidth: 48,
+      frameHeight: 48
+    });
+    this.load.spritesheet('player_hurt', 'assets/img/soldiers/Biker/Biker_hurt.png', {
+      frameWidth: 48,
+      frameHeight: 48
+    });
+    this.load.spritesheet('player_jump_hurt', 'assets/img/soldiers/Biker/Biker_jump_hurt.png', {
+      frameWidth: 48,
+      frameHeight: 48
+    });    
+    this.load.spritesheet('player_run_hurt', 'assets/img/soldiers/Biker/Biker_run_hurt.png', {
       frameWidth: 48,
       frameHeight: 48
     });
@@ -80,8 +97,10 @@ export default class Scene extends Phaser.Scene {
     this.text.setPadding(20, 16);
     this.text.setVisible(false);
 
+    //colliders
     this.physics.add.collider(this.player, this.floor);
     this.physics.add.collider(this.zombieMan, this.floor);
+    this.physics.add.overlap(this.player, this.zombieMan, () => this.attackToHuman());
   }
 
   update() {
@@ -94,12 +113,33 @@ export default class Scene extends Phaser.Scene {
         this.run(false);
       }
     } else {
+      const playerBounds = this.player.getBounds();
+      const zombieBounds = this.zombieMan.getBounds();
+      this.isBeingAttacked = Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, zombieBounds);
       this.setupControls();
-      this.zombieMan.x -= 2;
+      if (!this.isBeingAttacked && this.zombieMan.x >= 0) {
+        this.playAnimation(this.zombieMan, 'zombie_man_anim');
+        this.zombieMan.setVelocityX(0);
+        this.followPlayer();
+      }
       if (this.zombieMan.x < 0) {
         this.zombieMan.destroy();
       }
     }
+  }
+
+
+  followPlayer() {
+    this.zombieMan.setFlipX(this.zombieMan.body.angle >= 2) // If angle is greather than 2 then is left side
+    this.physics.moveToObject(this.zombieMan, this.player, 100);
+  }
+
+  attackToHuman() {
+    this.zombieMan.setVelocityX(0);
+    if (!this.isJumping && !this.isRunning) {
+      this.playAnimation(this.player,'player_hurt_anim');
+    }
+    this.playAnimation(this.zombieMan,'zombie_man_attack_anim');    
   }
 
 
@@ -141,6 +181,27 @@ export default class Scene extends Phaser.Scene {
       repeat: 1,
       hideOnComplete: true
     });
+    this.anims.create({
+      key: 'player_hurt_anim',
+      frames: this.anims.generateFrameNumbers('player_hurt'),
+      frameRate: 16,
+      repeat: -1,
+      hideOnComplete: true
+    });
+    this.anims.create({
+      key: 'player_run_hurt_anim',
+      frames: this.anims.generateFrameNumbers('player_run_hurt'),
+      frameRate: 16,
+      repeat: -1,
+      hideOnComplete: true
+    });
+    this.anims.create({
+      key: 'player_jump_hurt_anim',
+      frames: this.anims.generateFrameNumbers('player_jump_hurt'),
+      frameRate: 5,
+      repeat: 1,
+      hideOnComplete: true
+    });
 
     // Animations Zombie
     this.anims.create({
@@ -148,6 +209,13 @@ export default class Scene extends Phaser.Scene {
       frames: this.anims.generateFrameNumbers('zombie_man'),
       frameRate: 16,
       repeat: -1
+    });
+    this.anims.create({
+      key: 'zombie_man_attack_anim',
+      frames: this.anims.generateFrameNumbers('zombie_man_attack'),
+      frameRate: 16,
+      repeat: -1,
+      hideOnComplete: true
     });    
   }
 
@@ -177,6 +245,7 @@ export default class Scene extends Phaser.Scene {
   }
 
   playAnimation(sprite, key, ignoreActualAnimation = false) {
+    if(!sprite?.anims) return;
     if (ignoreActualAnimation) {
       sprite.play(key);
     } else {
@@ -190,11 +259,11 @@ export default class Scene extends Phaser.Scene {
     this.text.setVisible(true);
     setTimeout(() => {
       this.text.setText('¡Debo encontrarlos, cueste lo que cueste!');
-    }, 2500);
+    }, 200);
     setTimeout(() => {
       this.isInitialState = false;
       this.text.setVisible(false);
-    }, 2000);
+    }, 200);
   }
 
   setupControls() {
@@ -222,7 +291,11 @@ export default class Scene extends Phaser.Scene {
 
   jump() {
     this.isJumping = true;
-    this.playAnimation(this.player, 'player_jump_anim');
+    if (this.isBeingAttacked) {
+      this.playAnimation(this.player, 'player_jump_hurt_anim');
+    } else {
+      this.playAnimation(this.player, 'player_jump_anim');
+    }
     this.player.setVelocityY(-800);
     if (!this.player.body.velocity.x) { // If x is zero
       this.player.setVelocityX(this.player.flipX ? -100 : 100);
@@ -230,14 +303,22 @@ export default class Scene extends Phaser.Scene {
   }
 
   run(isLeft = true) {
-    this.playAnimation(this.player, 'player_walk_anim');
+    this.isRunning = true;
+    if (this.isBeingAttacked) {
+      this.playAnimation(this.player, 'player_run_hurt_anim');
+    } else {
+      this.playAnimation(this.player, 'player_walk_anim');
+    }
     this.player.setFlipX(isLeft);
     this.player.setVelocityX(isLeft ? -300 : 300);
     this.floorImg.tilePositionX += isLeft ? -4 : 4;
   }
 
   stop() {
+    this.isRunning = false;
     this.player.setVelocity(0,0);
-    this.playAnimation(this.player, 'player_stop_anim');
+    if(!this.isBeingAttacked){
+      this.playAnimation(this.player, 'player_stop_anim');
+    }
   }
 }
