@@ -92,9 +92,7 @@ export default class Scene extends Phaser.Scene {
     //colliders
     this.physics.add.collider(this.player, this.floor);
     this.physics.add.collider(this.zombieMan, this.floor);
-    this.physics.add.collider(this.player,this.zombieMan);
-    //this.attack = this.physics.add.collider(this.zombieMan,this.player, ()=>this.attackToHuman());
-    this.physics.add.overlap(this.zombieMan,this.player,()=>this.attackToHuman());
+    this.physics.add.overlap(this.player, this.zombieMan, () => this.attackToHuman());
   }
 
   update() {
@@ -111,16 +109,22 @@ export default class Scene extends Phaser.Scene {
       const zombieBounds = this.zombieMan.getBounds();
       this.isBeingAttacked = Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, zombieBounds);
       this.setupControls();
-      this.zombieMan.x -= 2;
+      if (!this.isBeingAttacked && this.zombieMan.x >= 0) {
+        this.playAnimation(this.zombieMan, 'zombie_man_anim');
+        this.zombieMan.setVelocityX(0);
+        this.zombieMan.x -= 2;
+      }
       if (this.zombieMan.x < 0) {
         this.zombieMan.destroy();
       }
     }
   }
 
-  attackToHuman(){    
-    this.zombieMan.setVelocity(0,0);
-    this.playAnimation(this.player,'player_hurt_anim');
+  attackToHuman() {
+    this.zombieMan.setVelocityX(0);
+    if (!this.isJumping && !this.isRunning) {
+      this.playAnimation(this.player,'player_hurt_anim');
+    }
     this.playAnimation(this.zombieMan,'zombie_man_attack_anim');    
   }
 
@@ -213,7 +217,7 @@ export default class Scene extends Phaser.Scene {
   }
 
   playAnimation(sprite, key, ignoreActualAnimation = false) {
-    if(!sprite.anims) return;
+    if(!sprite?.anims) return;
     if (ignoreActualAnimation) {
       sprite.play(key);
     } else {
@@ -267,6 +271,7 @@ export default class Scene extends Phaser.Scene {
   }
 
   run(isLeft = true) {
+    this.isRunning = true;
     this.playAnimation(this.player, 'player_walk_anim');
     this.player.setFlipX(isLeft);
     this.player.setVelocityX(isLeft ? -300 : 300);
@@ -274,6 +279,7 @@ export default class Scene extends Phaser.Scene {
   }
 
   stop() {
+    this.isRunning = false;
     this.player.setVelocity(0,0);
     if(!this.isBeingAttacked){
       this.playAnimation(this.player, 'player_stop_anim');
