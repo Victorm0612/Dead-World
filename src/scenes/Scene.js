@@ -47,6 +47,14 @@ export default class Scene extends Phaser.Scene {
       frameWidth: 48,
       frameHeight: 48
     });
+    this.load.spritesheet('player_jump_hurt', 'assets/img/soldiers/Biker/Biker_jump_hurt.png', {
+      frameWidth: 48,
+      frameHeight: 48
+    });    
+    this.load.spritesheet('player_run_hurt', 'assets/img/soldiers/Biker/Biker_run_hurt.png', {
+      frameWidth: 48,
+      frameHeight: 48
+    });
   
     // sfx
     this.load.audio('soundtrack', 'assets/music/soundtrack.mp3');
@@ -112,12 +120,18 @@ export default class Scene extends Phaser.Scene {
       if (!this.isBeingAttacked && this.zombieMan.x >= 0) {
         this.playAnimation(this.zombieMan, 'zombie_man_anim');
         this.zombieMan.setVelocityX(0);
-        this.zombieMan.x -= 2;
+        this.followPlayer();
       }
       if (this.zombieMan.x < 0) {
         this.zombieMan.destroy();
       }
     }
+  }
+
+
+  followPlayer() {
+    this.zombieMan.setFlipX(this.zombieMan.body.angle >= 2) // If angle is greather than 2 then is left side
+    this.physics.moveToObject(this.zombieMan, this.player, 100);
   }
 
   attackToHuman() {
@@ -172,6 +186,20 @@ export default class Scene extends Phaser.Scene {
       frames: this.anims.generateFrameNumbers('player_hurt'),
       frameRate: 16,
       repeat: -1,
+      hideOnComplete: true
+    });
+    this.anims.create({
+      key: 'player_run_hurt_anim',
+      frames: this.anims.generateFrameNumbers('player_run_hurt'),
+      frameRate: 16,
+      repeat: -1,
+      hideOnComplete: true
+    });
+    this.anims.create({
+      key: 'player_jump_hurt_anim',
+      frames: this.anims.generateFrameNumbers('player_jump_hurt'),
+      frameRate: 5,
+      repeat: 1,
       hideOnComplete: true
     });
 
@@ -263,7 +291,11 @@ export default class Scene extends Phaser.Scene {
 
   jump() {
     this.isJumping = true;
-    this.playAnimation(this.player, 'player_jump_anim');
+    if (this.isBeingAttacked) {
+      this.playAnimation(this.player, 'player_jump_hurt_anim');
+    } else {
+      this.playAnimation(this.player, 'player_jump_anim');
+    }
     this.player.setVelocityY(-800);
     if (!this.player.body.velocity.x) { // If x is zero
       this.player.setVelocityX(this.player.flipX ? -100 : 100);
@@ -272,7 +304,11 @@ export default class Scene extends Phaser.Scene {
 
   run(isLeft = true) {
     this.isRunning = true;
-    this.playAnimation(this.player, 'player_walk_anim');
+    if (this.isBeingAttacked) {
+      this.playAnimation(this.player, 'player_run_hurt_anim');
+    } else {
+      this.playAnimation(this.player, 'player_walk_anim');
+    }
     this.player.setFlipX(isLeft);
     this.player.setVelocityX(isLeft ? -300 : 300);
     this.floorImg.tilePositionX += isLeft ? -4 : 4;
