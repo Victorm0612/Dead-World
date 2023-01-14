@@ -9,7 +9,6 @@ export default class Scene extends Phaser.Scene {
     this.isInitialState = true;
     this.isJumping = false;
     this.isBeingAttacked = false;
-
   }
   preload() {
     this.load.setBaseURL('http://localhost:3000/src/');
@@ -17,6 +16,10 @@ export default class Scene extends Phaser.Scene {
     // Background
     this.load.image('background', 'assets/img/background/War2/Bright/War2.png');
     this.load.image('floor', 'assets/img/background/War2/Bright/road.png');
+
+    //HUD
+    this.load.image('health_container', 'assets/img/hud/health_bar_empty.png');
+    this.load.image('health_bar', 'assets/img/hud/health_bar_fully.png');
 
     // Main character
 
@@ -113,6 +116,10 @@ export default class Scene extends Phaser.Scene {
         this.run(false);
       }
     } else {
+      if(this.healthMask.x <= 685) {
+        this.scene.restart();
+      }
+
       const playerBounds = this.player.getBounds();
       const zombieBounds = this.zombieMan.getBounds();
       this.isBeingAttacked = Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, zombieBounds);
@@ -139,13 +146,24 @@ export default class Scene extends Phaser.Scene {
     if (!this.isJumping && !this.isRunning) {
       this.playAnimation(this.player,'player_hurt_anim');
     }
-    this.playAnimation(this.zombieMan,'zombie_man_attack_anim');    
+    this.playAnimation(this.zombieMan,'zombie_man_attack_anim');
+
+    // moving the mask
+    this.healthMask.x -= 0.5;
   }
 
 
   createSprites() {
     // Set background
     this.background = this.add.sprite(WIDTH / 2, 320, 'background');
+
+    // HUD
+    this.healthContainer = this.add.sprite(WIDTH - 130, 40, 'health_container');
+    this.healthBar = this.add.sprite(this.healthContainer.x, this.healthContainer.y, 'health_bar');
+    this.healthMask = this.add.sprite(this.healthBar.x, this.healthBar.y, 'health_bar');
+
+    this.healthMask.visible = false;
+    this.healthBar.mask = new Phaser.Display.Masks.BitmapMask(this, this.healthMask);
     
     // Floor
     this.floorImg = this.add.tileSprite(WIDTH / 2,  HEIGHT - 45, 0, 0, 'floor');
@@ -222,6 +240,11 @@ export default class Scene extends Phaser.Scene {
   adjustSpriteProperties() {
     // Background
     this.background.setScale(.7);
+
+    // HUD
+    this.healthContainer.setScale(.5);
+    this.healthBar.setScale(.5);
+    this.healthMask.setScale(.5);
 
     // Floor
     this.floorImg.setScale(.5);
