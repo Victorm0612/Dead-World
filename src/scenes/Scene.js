@@ -6,6 +6,7 @@ export default class Scene extends Phaser.Scene {
   constructor() {
     super('init');
     this.score = 0;
+    this.isGameOver = false;
     this.isInitialState = true;
     this.isJumping = false;
     this.isBeingAttacked = false;
@@ -25,6 +26,10 @@ export default class Scene extends Phaser.Scene {
 
     // Zombies
     this.load.spritesheet('zombie_man', 'assets/img/zombies/zombie_man/Walk.png', {
+      frameWidth: 96,
+      frameHeight: 96,
+    });
+    this.load.spritesheet('zombie_man_stop', 'assets/img/zombies/zombie_man/Idle.png', {
       frameWidth: 96,
       frameHeight: 96,
     });
@@ -50,6 +55,10 @@ export default class Scene extends Phaser.Scene {
       frameWidth: 48,
       frameHeight: 48
     });
+    this.load.spritesheet('player_death', 'assets/img/soldiers/Biker/Biker_death.png', {
+      frameWidth: 48,
+      frameHeight: 48
+    });
     this.load.spritesheet('player_jump_hurt', 'assets/img/soldiers/Biker/Biker_jump_hurt.png', {
       frameWidth: 48,
       frameHeight: 48
@@ -70,8 +79,9 @@ export default class Scene extends Phaser.Scene {
     this.load.audio('gun', 'assets/sfx/shoot.mp3');
 
     // sfx related to zombies
-    this.load.audio('boss', 'assets/sfx/zombie_boss');
-    this.load.audio('sfx_zombie', 'assets/sfx/zombie_dead');
+    this.load.audio('zombie_boss', 'assets/sfx/zombie_boss.mp3');
+    this.load.audio('zombie_sfx', 'assets/sfx/zombie_dead.mp3');
+    this.load.audio('zombie_attack', 'assets/sfx/sword_slash.mp3');
   }
 
 
@@ -88,10 +98,11 @@ export default class Scene extends Phaser.Scene {
 
     // music
     this.soundtrack = this.sound.add('soundtrack');
+    this.attackSound = this.sound.add('zombie_attack');
     if (!this.playing && !this.load.isLoading()) {
       this.playing = true;
       this.soundtrack.loop = true;
-      //this.soundtrack.play();
+      this.soundtrack.play();
     }
 
     // first dialog
@@ -104,6 +115,18 @@ export default class Scene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.floor);
     this.physics.add.collider(this.zombieMan, this.floor);
     this.physics.add.overlap(this.player, this.zombieMan, () => this.attackToHuman());
+
+    this.time.addEvent({
+      duration: 1000,
+      repeat: -1,
+      callbackScope: this,
+      callback: () => {
+        if(this.isBeingAttacked && !this.isGameOver) {
+          this.attackSound.play();
+        }
+      },
+      delay: 500
+    });
   }
 
   update() {
@@ -116,10 +139,10 @@ export default class Scene extends Phaser.Scene {
         this.run(false);
       }
     } else {
-      if(this.healthMask.x <= 685) {
-        this.scene.restart();
+      if(this.isGameOver) return;
+      if(this.healthMask.x <= 685 && !this.isGameOver) {
+        this.gameOver();
       }
-
       const playerBounds = this.player.getBounds();
       const zombieBounds = this.zombieMan.getBounds();
       this.isBeingAttacked = Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, zombieBounds);
@@ -142,6 +165,7 @@ export default class Scene extends Phaser.Scene {
   }
 
   attackToHuman() {
+    if(this.isGameOver) return;
     this.zombieMan.setVelocityX(0);
     if (!this.isJumping && !this.isRunning) {
       this.playAnimation(this.player,'player_hurt_anim');
@@ -184,14 +208,12 @@ export default class Scene extends Phaser.Scene {
       frameRate: 16,
       repeat: -1
     });
-
     this.anims.create({
       key: 'player_stop_anim',
       frames: this.anims.generateFrameNumbers('player_stop'),
       frameRate: 10,
       repeat: -1
-    });    
-
+    });
     this.anims.create({
       key: 'player_jump_anim',
       frames: this.anims.generateFrameNumbers('player_jump'),
@@ -204,6 +226,13 @@ export default class Scene extends Phaser.Scene {
       frames: this.anims.generateFrameNumbers('player_hurt'),
       frameRate: 16,
       repeat: -1,
+      hideOnComplete: true
+    });
+    this.anims.create({
+      key: 'player_death_anim',
+      frames: this.anims.generateFrameNumbers('player_death'),
+      frameRate: 16,
+      repeat: 0,
       hideOnComplete: true
     });
     this.anims.create({
@@ -225,6 +254,12 @@ export default class Scene extends Phaser.Scene {
     this.anims.create({
       key: 'zombie_man_anim',
       frames: this.anims.generateFrameNumbers('zombie_man'),
+      frameRate: 16,
+      repeat: -1
+    });
+    this.anims.create({
+      key: 'zombie_man_stop_anim',
+      frames: this.anims.generateFrameNumbers('zombie_man_stop'),
       frameRate: 16,
       repeat: -1
     });
@@ -290,7 +325,7 @@ export default class Scene extends Phaser.Scene {
   }
 
   setupControls() {
-    if (this.isJumping) {
+    if (this.isJumping && !this.isGameOver) {
       this.floorImg.tilePositionX += this.player.flipX ? -1.5 : 1.5;
       if (this.player.anims.getFrameName() === 3) {
         // jump animation is over
@@ -298,13 +333,13 @@ export default class Scene extends Phaser.Scene {
         this.playAnimation(this.player, 'player_stop_anim', true);
       }
     }
-    else if (this.cursors.up.isDown) {
+    else if (this.cursors.up.isDown && !this.isGameOver) {
       this.jump();
     }
-    else if (this.cursors.left.isDown) {
+    else if (this.cursors.left.isDown && !this.isGameOver) {
       this.run();
     }
-    else if (this.cursors.right.isDown) {
+    else if (this.cursors.right.isDown && !this.isGameOver) {
       this.run(false);
     }
     else {
@@ -343,5 +378,29 @@ export default class Scene extends Phaser.Scene {
     if(!this.isBeingAttacked){
       this.playAnimation(this.player, 'player_stop_anim');
     }
+  }
+  
+  gameOver() {
+    this.isGameOver = true;
+    this.isBeingAttacked = false;
+    this.playAnimation(this.zombieMan, 'zombie_man_stop_anim');
+    this.playAnimation(this.player, 'player_death_anim');
+    setTimeout(() => {
+      this.player.anims.pause(this.player.anims.currentAnim.frames[5]);
+    }, 200);
+
+    // Sounds
+    const deadBody = this.sound.add('fail_body');
+    const failSound = this.sound.add('fail_death');
+    failSound.play();
+    deadBody.play();
+    setTimeout(() => {
+      this.isInitialState = true;
+      this.isBeingAttacked = false;
+      this.isGameOver = false;
+      this.score = 0;
+      this.isJumping = false;
+      this.scene.restart();
+    }, 3500);
   }
 }
