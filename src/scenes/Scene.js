@@ -25,18 +25,9 @@ export default class Scene extends Phaser.Scene {
     // Main character
 
     // Zombies
-    this.load.spritesheet('zombie_man', 'assets/img/zombies/zombie_man/Walk.png', {
-      frameWidth: 96,
-      frameHeight: 96,
-    });
-    this.load.spritesheet('zombie_man_stop', 'assets/img/zombies/zombie_man/Idle.png', {
-      frameWidth: 96,
-      frameHeight: 96,
-    });
-    this.load.spritesheet('zombie_man_attack', 'assets/img/zombies/zombie_man/Attack_1.png', {
-      frameWidth: 96,
-      frameHeight: 96,
-    });
+    this.loadSpriteZombies('wild_zombie');
+    this.loadSpriteZombies('zombie_man');
+    this.loadSpriteZombies('zombie_woman');
 
     // Player
     this.load.spritesheet('player', 'assets/img/soldiers/Biker/Biker_run.png', {
@@ -92,18 +83,10 @@ export default class Scene extends Phaser.Scene {
     this.createSprites();
     this.adjustSpriteProperties();
     this.createAnimations();
-
-    this.playAnimation(this.zombieMan, 'zombie_man_anim', true);
     this.playAnimation(this.player, 'player_walk_anim', true);
 
     // music
-    this.soundtrack = this.sound.add('soundtrack');
-    this.attackSound = this.sound.add('zombie_attack');
-    if (!this.playing && !this.load.isLoading()) {
-      this.playing = true;
-      this.soundtrack.loop = true;
-      this.soundtrack.play();
-    }
+    this.initializeSounds();
 
     // first dialog
     this.text = this.add.text(30, 50, `¡¿Qué ha sucedido?!\n\n¡¿Dónde está mi esposa y mi hijo?!`, { font: '24px PixelGameFont, monospace' });
@@ -113,8 +96,6 @@ export default class Scene extends Phaser.Scene {
 
     //colliders
     this.physics.add.collider(this.player, this.floor);
-    this.physics.add.collider(this.zombieMan, this.floor);
-    this.physics.add.overlap(this.player, this.zombieMan, () => this.attackToHuman());
 
     this.time.addEvent({
       duration: 1000,
@@ -127,6 +108,9 @@ export default class Scene extends Phaser.Scene {
       },
       delay: 500
     });
+
+    this.zombies = this.physics.add.group();    
+    this.generateZombies();
   }
 
   update() {
@@ -134,48 +118,78 @@ export default class Scene extends Phaser.Scene {
       if (this.player.x >= 250) {
         this.player.x = 250;
         this.stop();
-        this.showInitialDialog();
-      } else {
-        this.run(false);
+        return this.showInitialDialog();
       }
-    } else {
-      if(this.isGameOver) return;
-      if(this.healthMask.x <= 685 && !this.isGameOver) {
-        this.gameOver();
-      }
-      const playerBounds = this.player.getBounds();
-      const zombieBounds = this.zombieMan.getBounds();
-      this.isBeingAttacked = Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, zombieBounds);
-      this.setupControls();
-      if (!this.isBeingAttacked && this.zombieMan.x >= 0) {
-        this.playAnimation(this.zombieMan, 'zombie_man_anim');
-        this.zombieMan.setVelocityX(0);
-        this.followPlayer();
-      }
-      if (this.zombieMan.x < 0) {
-        this.zombieMan.destroy();
-      }
+      return this.run(false);
     }
-  }
 
-
-  followPlayer() {
-    this.zombieMan.setFlipX(this.zombieMan.body.angle >= 2) // If angle is greather than 2 then is left side
-    this.physics.moveToObject(this.zombieMan, this.player, 100);
-  }
-
-  attackToHuman() {
     if(this.isGameOver) return;
-    this.zombieMan.setVelocityX(0);
+    if(this.healthMask.x <= 685 && !this.isGameOver) {
+      return this.gameOver();
+    }
+    this.setupControls();
+    
+    this.isBeingAttacked = this.zombies.children.entries.some((zombie) => {
+      const playerBounds = this.player.getBounds();
+      const zombieBounds = zombie.getBounds();
+      return Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, zombieBounds);
+    });
+
+    this.zombies.children.entries.forEach((zombie) => {
+      const playerBounds = this.player.getBounds();
+      const zombieBounds = zombie.getBounds();
+      const IsAttacking = Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, zombieBounds);
+      if (!IsAttacking && zombie.x >= 0) {
+        const [first, second] = zombie.texture.key.split('_');
+        this.playAnimation(zombie, `${first}_${second}_walk_anim`);
+        zombie.setVelocityX(0);
+        this.followPlayer(zombie);
+      }
+    });
+  }
+
+  generateZombies() {
+    const zombies = ['zombie_man', 'zombie_woman', 'wild_zombie'];
+    // group size
+    const size = Phaser.Math.Between(1, 3);
+    // time - how often they will come out?
+    const time = Phaser.Math.Between(5000, 10000);
+    for (let i = 0; i < size; i++) {
+      let newZombie;
+      newZombie = this.zombies.create(WIDTH + 70 + (i*300) , 467, `${zombies[i]}_walk`);
+      newZombie.body.allowGravity = false;
+      newZombie
+        .setScale(2)
+        .setFlipX(true);
+      this.playAnimation(newZombie, `${zombies[i]}_walk_anim`, true);
+      this.physics.add.collider(newZombie, this.floor);
+      this.physics.add.overlap(this.player, newZombie, () => this.attackToHuman(newZombie, `${zombies[i]}_attack`), null, this);  
+    }
+    //this.zombies.setVelocityX(-100);
+    this.time.delayedCall(time, this.generateZombies, [], this);
+  }
+
+  attackToHuman(sprite, key) {
+    if(this.isGameOver) return;
+    sprite.setVelocityX(0);
     if (!this.isJumping && !this.isRunning) {
       this.playAnimation(this.player,'player_hurt_anim');
     }
-    this.playAnimation(this.zombieMan,'zombie_man_attack_anim');
+    this.playAnimation(sprite, `${key}_anim`);
 
     // moving the mask
     this.healthMask.x -= 0.5;
   }
 
+  initializeSounds() {
+    this.soundtrack = this.sound.add('soundtrack');
+    this.attackSound = this.sound.add('zombie_attack');
+    if (!this.playing && !this.load.isLoading()) {
+      this.playing = true;
+      this.soundtrack.loop = true;
+      this.soundtrack.play();
+    }
+  }
 
   createSprites() {
     // Set background
@@ -192,9 +206,6 @@ export default class Scene extends Phaser.Scene {
     // Floor
     this.floorImg = this.add.tileSprite(WIDTH / 2,  HEIGHT - 45, 0, 0, 'floor');
     this.floor = this.physics.add.sprite(WIDTH / 2, HEIGHT - 30, 'floor');
-    
-    // Zombie
-    this.zombieMan = this.physics.add.sprite(WIDTH + 70 , 470, "zombie_man");
     
     // Player
     this.player = this.physics.add.sprite(-100, 490, 'player');
@@ -252,8 +263,8 @@ export default class Scene extends Phaser.Scene {
 
     // Animations Zombie
     this.anims.create({
-      key: 'zombie_man_anim',
-      frames: this.anims.generateFrameNumbers('zombie_man'),
+      key: 'zombie_man_walk_anim',
+      frames: this.anims.generateFrameNumbers('zombie_man_walk'),
       frameRate: 16,
       repeat: -1
     });
@@ -268,6 +279,67 @@ export default class Scene extends Phaser.Scene {
       frames: this.anims.generateFrameNumbers('zombie_man_attack'),
       frameRate: 16,
       repeat: -1,
+      hideOnComplete: true
+    });
+    this.anims.create({
+      key: 'zombie_man_death_anim',
+      frames: this.anims.generateFrameNumbers('zombie_man_death'),
+      frameRate: 16,
+      repeat: 0,
+      hideOnComplete: true
+    });
+    
+    this.anims.create({
+      key: 'zombie_woman_walk_anim',
+      frames: this.anims.generateFrameNumbers('zombie_woman_walk'),
+      frameRate: 16,
+      repeat: -1
+    });
+    this.anims.create({
+      key: 'zombie_woman_stop_anim',
+      frames: this.anims.generateFrameNumbers('zombie_woman_stop'),
+      frameRate: 16,
+      repeat: -1
+    });
+    this.anims.create({
+      key: 'zombie_woman_attack_anim',
+      frames: this.anims.generateFrameNumbers('zombie_woman_attack'),
+      frameRate: 16,
+      repeat: -1,
+      hideOnComplete: true
+    });
+    this.anims.create({
+      key: 'zombie_woman_death_anim',
+      frames: this.anims.generateFrameNumbers('zombie_woman_death'),
+      frameRate: 16,
+      repeat: 0,
+      hideOnComplete: true
+    });
+    
+    this.anims.create({
+      key: 'wild_zombie_walk_anim',
+      frames: this.anims.generateFrameNumbers('wild_zombie_walk'),
+      frameRate: 16,
+      repeat: -1
+    });
+    this.anims.create({
+      key: 'wild_zombie_stop_anim',
+      frames: this.anims.generateFrameNumbers('wild_zombie_stop'),
+      frameRate: 16,
+      repeat: -1
+    });
+    this.anims.create({
+      key: 'wild_zombie_attack_anim',
+      frames: this.anims.generateFrameNumbers('wild_zombie_attack'),
+      frameRate: 16,
+      repeat: -1,
+      hideOnComplete: true
+    });
+    this.anims.create({
+      key: 'wild_zombie_death_anim',
+      frames: this.anims.generateFrameNumbers('wild_zombie_death'),
+      frameRate: 16,
+      repeat: 0,
       hideOnComplete: true
     });    
   }
@@ -289,12 +361,6 @@ export default class Scene extends Phaser.Scene {
       .body
       .setAllowGravity(false)
       .setImmovable(true);
-
-    // Zombie
-    this.zombieMan
-      .setScale(2)
-      .setFlipX(true);
-
 
     // Player
     this.player
@@ -383,7 +449,12 @@ export default class Scene extends Phaser.Scene {
   gameOver() {
     this.isGameOver = true;
     this.isBeingAttacked = false;
-    this.playAnimation(this.zombieMan, 'zombie_man_stop_anim');
+    this.player.setVelocity(0,0);
+    this.zombies.children.entries.forEach((zombie) => {
+      const [first, second] = zombie.texture.key.split('_');
+      zombie.setVelocity(0,0);
+      this.playAnimation(zombie, `${first}_${second}_stop_anim`);
+    });
     this.playAnimation(this.player, 'player_death_anim');
     setTimeout(() => {
       this.player.anims.pause(this.player.anims.currentAnim.frames[5]);
@@ -402,5 +473,36 @@ export default class Scene extends Phaser.Scene {
       this.isJumping = false;
       this.scene.restart();
     }, 3500);
+  }
+
+  followPlayer(sprite) {
+    const playerPosition = this.player.body.position.x;
+    const spritePosition = sprite.body.position.x;
+    sprite.setFlipX(spritePosition > playerPosition) // If spritePosition is grather than playerPosition then is right side
+    this.physics.moveToObject(sprite, this.player, 100);
+    sprite.setVelocityY(0);
+  }  
+
+  loadSpriteZombies(key) {
+    this.load.spritesheet(`${key}_walk`, `assets/img/zombies/${key}/Walk.png`, {
+      frameWidth: 96,
+      frameHeight: 96,
+    });
+    this.load.spritesheet(`${key}_stop`, `assets/img/zombies/${key}/Idle.png`, {
+      frameWidth: 96,
+      frameHeight: 96,
+    });
+    this.load.spritesheet(`${key}_attack`, `assets/img/zombies/${key}/Attack_1.png`, {
+      frameWidth: 96,
+      frameHeight: 96,
+    });
+    this.load.spritesheet(`${key}_hurt`, `assets/img/zombies/${key}/Hurt.png`, {
+      frameWidth: 96,
+      frameHeight: 96,
+    });
+    this.load.spritesheet(`${key}_death`, `assets/img/zombies/${key}/Dead.png`, {
+      frameWidth: 96,
+      frameHeight: 96,
+    });
   }
 }
