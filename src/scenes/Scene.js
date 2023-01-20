@@ -1,6 +1,6 @@
 "use strict";
 
-import { WIDTH, HEIGHT } from "../constants/constants.js";
+import { WIDTH, HEIGHT, ZOMBIES } from "../constants/constants.js";
 
 export default class Scene extends Phaser.Scene {
   constructor() {
@@ -9,6 +9,7 @@ export default class Scene extends Phaser.Scene {
     this.isGameOver = false;
     this.isInitialState = true;
     this.isJumping = false;
+    this.playerAttacking = false;
     this.isBeingAttacked = false;
   }
   preload() {
@@ -17,6 +18,9 @@ export default class Scene extends Phaser.Scene {
     // Background
     this.load.image('background', 'assets/img/background/War2/Bright/War2.png');
     this.load.image('floor', 'assets/img/background/War2/Bright/road.png');
+
+    // Bullet
+    this.load.image('bullet', 'assets/img/soldiers/Biker/bullet.png');
 
     //HUD
     this.load.image('health_container', 'assets/img/hud/health_bar_empty.png');
@@ -31,6 +35,14 @@ export default class Scene extends Phaser.Scene {
 
     // Player
     this.load.spritesheet('player', 'assets/img/soldiers/Biker/Biker_run.png', {
+      frameWidth: 48,
+      frameHeight: 48
+    });
+    this.load.spritesheet('player_run_attack', 'assets/img/soldiers/Biker/Biker_run_gun_attack.png', {
+      frameWidth: 48,
+      frameHeight: 48
+    });
+    this.load.spritesheet('player_attack', 'assets/img/soldiers/Biker/Biker_attack_gun.png', {
       frameWidth: 48,
       frameHeight: 48
     });
@@ -58,6 +70,14 @@ export default class Scene extends Phaser.Scene {
       frameWidth: 48,
       frameHeight: 48
     });
+    this.load.spritesheet('player_run_attack_hurt', 'assets/img/soldiers/Biker/Biker_run_gun_attack_hurt.png', {
+      frameWidth: 48,
+      frameHeight: 48
+    });
+    this.load.spritesheet('player_stop_attack_hurt', 'assets/img/soldiers/Biker/Biker_hurt_attack_gun.png', {
+      frameWidth: 48,
+      frameHeight: 48
+    });
   
     // sfx
     this.load.audio('soundtrack', 'assets/music/soundtrack.mp3');
@@ -79,6 +99,12 @@ export default class Scene extends Phaser.Scene {
   create() {
     // Set controls
     this.cursors = this.input.keyboard.createCursorKeys();
+    this.input.keyboard.on('keydown', (event) => {
+      if (event.keyCode === 88 && !this.playerAttacking) {
+        this.shootGun();
+        this.playerAttacking = true;
+      }
+    });
 
     this.createSprites();
     this.adjustSpriteProperties();
@@ -108,8 +134,6 @@ export default class Scene extends Phaser.Scene {
       },
       delay: 500
     });
-
-    this.zombies = this.physics.add.group();    
     this.generateZombies();
   }
 
@@ -149,7 +173,7 @@ export default class Scene extends Phaser.Scene {
   }
 
   generateZombies() {
-    const zombies = ['zombie_man', 'zombie_woman', 'wild_zombie'];
+    const zombies = [...ZOMBIES];
     // group size
     const size = Phaser.Math.Between(1, 3);
     // time - how often they will come out?
@@ -157,22 +181,48 @@ export default class Scene extends Phaser.Scene {
     for (let i = 0; i < size; i++) {
       let newZombie;
       newZombie = this.zombies.create(WIDTH + 70 + (i*300) , 467, `${zombies[i]}_walk`);
-      newZombie.body.allowGravity = false;
       newZombie
         .setScale(2)
         .setFlipX(true);
+      newZombie.hit = 0;
       this.playAnimation(newZombie, `${zombies[i]}_walk_anim`, true);
       this.physics.add.collider(newZombie, this.floor);
       this.physics.add.overlap(this.player, newZombie, () => this.attackToHuman(newZombie, `${zombies[i]}_attack`), null, this);  
     }
-    //this.zombies.setVelocityX(-100);
     this.time.delayedCall(time, this.generateZombies, [], this);
+  }
+
+  shootGun() {
+    let newBullet;
+    newBullet = this.bullets.create(this.player.body.x + 50, this.player.body.y + 80, 'bullet');
+    newBullet
+      .setScale(5)
+      .setFlipX(this.player.flipX)
+      .body.allowGravity = false;
+    this.physics.add.collider(newBullet, this.floor);
+    this.physics.add.overlap(this.zombies, newBullet, (bullet, zombie) => {
+      bullet.destroy();
+      zombie.hit += 1;
+
+      if (zombie.hit >= 3) {
+        this.zombies.killAndHide(zombie);
+        zombie.destroy();
+      }
+    });
+    newBullet.setVelocityX(this.player.flipX ? -1500 : 1500);
+    this.time.delayedCall(450, () => {
+      this.playerAttacking = false;
+    }, [], this);
   }
 
   attackToHuman(sprite, key) {
     if(this.isGameOver) return;
     sprite.setVelocityX(0);
-    if (!this.isJumping && !this.isRunning) {
+    if (this.playerAttacking && !this.isRunning && !this.isJumping) {
+      this.player.setVelocity(0,0);
+      this.playAnimation(this.player,'player_stop_attack_hurt_anim');
+    }
+    else if (!this.isJumping && !this.isRunning) {
       this.playAnimation(this.player,'player_hurt_anim');
     }
     this.playAnimation(sprite, `${key}_anim`);
@@ -194,6 +244,12 @@ export default class Scene extends Phaser.Scene {
   createSprites() {
     // Set background
     this.background = this.add.sprite(WIDTH / 2, 320, 'background');
+
+    // Bullets
+    this.bullets = this.physics.add.group();
+
+    // Zombies
+    this.zombies = this.physics.add.group();
 
     // HUD
     this.healthContainer = this.add.sprite(WIDTH - 130, 40, 'health_container');
@@ -218,6 +274,18 @@ export default class Scene extends Phaser.Scene {
       frames: this.anims.generateFrameNumbers('player'),
       frameRate: 16,
       repeat: -1
+    });
+    this.anims.create({
+      key: 'player_stop_attack_anim',
+      frames: this.anims.generateFrameNumbers('player_attack'),
+      frameRate: 16,
+      repeat: 0
+    });
+    this.anims.create({
+      key: 'player_run_attack_anim',
+      frames: this.anims.generateFrameNumbers('player_run_attack'),
+      frameRate: 16,
+      repeat: 0
     });
     this.anims.create({
       key: 'player_stop_anim',
@@ -247,6 +315,20 @@ export default class Scene extends Phaser.Scene {
       hideOnComplete: true
     });
     this.anims.create({
+      key: 'player_run_attack_hurt_anim',
+      frames: this.anims.generateFrameNumbers('player_run_attack_hurt'),
+      frameRate: 16,
+      repeat: -1,
+      hideOnComplete: true
+    });
+    this.anims.create({
+      key: 'player_stop_attack_hurt_anim',
+      frames: this.anims.generateFrameNumbers('player_stop_attack_hurt'),
+      frameRate: 16,
+      repeat: -1,
+      hideOnComplete: true
+    });
+    this.anims.create({
       key: 'player_run_hurt_anim',
       frames: this.anims.generateFrameNumbers('player_run_hurt'),
       frameRate: 16,
@@ -262,86 +344,34 @@ export default class Scene extends Phaser.Scene {
     });
 
     // Animations Zombie
-    this.anims.create({
-      key: 'zombie_man_walk_anim',
-      frames: this.anims.generateFrameNumbers('zombie_man_walk'),
-      frameRate: 16,
-      repeat: -1
+    ZOMBIES.forEach((zombie) => {
+      this.anims.create({
+        key: `${zombie}_walk_anim`,
+        frames: this.anims.generateFrameNumbers(`${zombie}_walk`),
+        frameRate: 16,
+        repeat: -1
+      });
+      this.anims.create({
+        key: `${zombie}_stop_anim`,
+        frames: this.anims.generateFrameNumbers(`${zombie}_stop`),
+        frameRate: 16,
+        repeat: -1
+      });
+      this.anims.create({
+        key: `${zombie}_attack_anim`,
+        frames: this.anims.generateFrameNumbers(`${zombie}_attack`),
+        frameRate: 16,
+        repeat: -1,
+        hideOnComplete: true
+      });
+      this.anims.create({
+        key: `${zombie}_death_anim`,
+        frames: this.anims.generateFrameNumbers(`${zombie}_death`),
+        frameRate: 16,
+        repeat: 0,
+        hideOnComplete: true
+      });
     });
-    this.anims.create({
-      key: 'zombie_man_stop_anim',
-      frames: this.anims.generateFrameNumbers('zombie_man_stop'),
-      frameRate: 16,
-      repeat: -1
-    });
-    this.anims.create({
-      key: 'zombie_man_attack_anim',
-      frames: this.anims.generateFrameNumbers('zombie_man_attack'),
-      frameRate: 16,
-      repeat: -1,
-      hideOnComplete: true
-    });
-    this.anims.create({
-      key: 'zombie_man_death_anim',
-      frames: this.anims.generateFrameNumbers('zombie_man_death'),
-      frameRate: 16,
-      repeat: 0,
-      hideOnComplete: true
-    });
-    
-    this.anims.create({
-      key: 'zombie_woman_walk_anim',
-      frames: this.anims.generateFrameNumbers('zombie_woman_walk'),
-      frameRate: 16,
-      repeat: -1
-    });
-    this.anims.create({
-      key: 'zombie_woman_stop_anim',
-      frames: this.anims.generateFrameNumbers('zombie_woman_stop'),
-      frameRate: 16,
-      repeat: -1
-    });
-    this.anims.create({
-      key: 'zombie_woman_attack_anim',
-      frames: this.anims.generateFrameNumbers('zombie_woman_attack'),
-      frameRate: 16,
-      repeat: -1,
-      hideOnComplete: true
-    });
-    this.anims.create({
-      key: 'zombie_woman_death_anim',
-      frames: this.anims.generateFrameNumbers('zombie_woman_death'),
-      frameRate: 16,
-      repeat: 0,
-      hideOnComplete: true
-    });
-    
-    this.anims.create({
-      key: 'wild_zombie_walk_anim',
-      frames: this.anims.generateFrameNumbers('wild_zombie_walk'),
-      frameRate: 16,
-      repeat: -1
-    });
-    this.anims.create({
-      key: 'wild_zombie_stop_anim',
-      frames: this.anims.generateFrameNumbers('wild_zombie_stop'),
-      frameRate: 16,
-      repeat: -1
-    });
-    this.anims.create({
-      key: 'wild_zombie_attack_anim',
-      frames: this.anims.generateFrameNumbers('wild_zombie_attack'),
-      frameRate: 16,
-      repeat: -1,
-      hideOnComplete: true
-    });
-    this.anims.create({
-      key: 'wild_zombie_death_anim',
-      frames: this.anims.generateFrameNumbers('wild_zombie_death'),
-      frameRate: 16,
-      repeat: 0,
-      hideOnComplete: true
-    });    
   }
 
   adjustSpriteProperties() {
@@ -429,9 +459,17 @@ export default class Scene extends Phaser.Scene {
   run(isLeft = true) {
     this.isRunning = true;
     if (this.isBeingAttacked) {
-      this.playAnimation(this.player, 'player_run_hurt_anim');
+      if (this.playerAttacking) {
+        this.playAnimation(this.player, 'player_run_attack_hurt_anim');
+      } else {
+        this.playAnimation(this.player, 'player_run_hurt_anim');
+      }
     } else {
-      this.playAnimation(this.player, 'player_walk_anim');
+      if (this.playerAttacking) {
+        this.playAnimation(this.player, 'player_run_attack_anim');
+      } else {
+        this.playAnimation(this.player, 'player_walk_anim');
+      }
     }
     this.player.setFlipX(isLeft);
     this.player.setVelocityX(isLeft ? -300 : 300);
@@ -441,8 +479,12 @@ export default class Scene extends Phaser.Scene {
   stop() {
     this.isRunning = false;
     this.player.setVelocity(0,0);
-    if(!this.isBeingAttacked){
-      this.playAnimation(this.player, 'player_stop_anim');
+    if(!this.isBeingAttacked) {
+      if (this.playerAttacking) {
+        this.playAnimation(this.player, 'player_stop_attack_anim');
+      } else {
+        this.playAnimation(this.player, 'player_stop_anim');
+      }
     }
   }
   
