@@ -119,6 +119,11 @@ export default class Scene extends Phaser.Scene {
     this.text.setBackgroundColor('black');
     this.text.setPadding(20, 16);
     this.text.setVisible(false);
+    
+    this.scoreText = this.add.text(30, 50, `SCORE: ${this.score}`, { font: '24px PixelGameFont, monospace' });
+    this.scoreText.setBackgroundColor('black');
+    this.scoreText.setPadding(20, 5);
+    this.scoreText.setVisible(false);
 
     //colliders
     this.physics.add.collider(this.player, this.floor);
@@ -139,6 +144,7 @@ export default class Scene extends Phaser.Scene {
 
   update() {
     if(this.isInitialState) {
+      this.soundtrack.setVolume(1);
       if (this.player.x >= 250) {
         this.player.x = 250;
         this.stop();
@@ -146,7 +152,7 @@ export default class Scene extends Phaser.Scene {
       }
       return this.run(false);
     }
-
+    this.soundtrack.setVolume(0.3);
     if(this.isGameOver) return;
     if(this.healthMask.x <= 685 && !this.isGameOver) {
       return this.gameOver();
@@ -163,7 +169,7 @@ export default class Scene extends Phaser.Scene {
       const playerBounds = this.player.getBounds();
       const zombieBounds = zombie.getBounds();
       const IsAttacking = Phaser.Geom.Intersects.RectangleToRectangle(playerBounds, zombieBounds);
-      if (!IsAttacking && zombie.x >= 0) {
+      if (!IsAttacking && zombie.x >= 0 && !zombie.isDead) {
         const [first, second] = zombie.texture.key.split('_');
         this.playAnimation(zombie, `${first}_${second}_walk_anim`);
         zombie.setVelocityX(0);
@@ -175,44 +181,57 @@ export default class Scene extends Phaser.Scene {
   generateZombies() {
     const zombies = [...ZOMBIES];
     // group size
-    const size = Phaser.Math.Between(1, 3);
+    const size = Phaser.Math.Between(1, 5);
     // time - how often they will come out?
-    const time = Phaser.Math.Between(5000, 10000);
+    const time = Phaser.Math.Between(3000, 4000);
     for (let i = 0; i < size; i++) {
-      let newZombie;
-      newZombie = this.zombies.create(WIDTH + 70 + (i*300) , 467, `${zombies[i]}_walk`);
+      const zombieSelected = Phaser.Math.Between(0, 2);
+      const newZombie = this.zombies.create(WIDTH + 70 + (i*300) , 467, `${zombies[zombieSelected]}_walk`);
       newZombie
         .setScale(2)
         .setFlipX(true);
       newZombie.hit = 0;
-      this.playAnimation(newZombie, `${zombies[i]}_walk_anim`, true);
+      newZombie.isDead = false;
+      this.playAnimation(newZombie, `${zombies[zombieSelected]}_walk_anim`, true);
       this.physics.add.collider(newZombie, this.floor);
-      this.physics.add.overlap(this.player, newZombie, () => this.attackToHuman(newZombie, `${zombies[i]}_attack`), null, this);  
+      this.physics.add.overlap(this.player, newZombie, () => this.attackToHuman(newZombie, zombies[zombieSelected]), null, this);  
     }
     this.time.delayedCall(time, this.generateZombies, [], this);
   }
 
   shootGun() {
-    let newBullet;
-    newBullet = this.bullets.create(this.player.body.x + 50, this.player.body.y + 80, 'bullet');
+    const newBullet = this.bullets.create(this.player.body.x + 50, this.player.body.y + 80, 'bullet');
     newBullet
       .setScale(5)
       .setFlipX(this.player.flipX)
       .body.allowGravity = false;
     this.physics.add.collider(newBullet, this.floor);
-    this.physics.add.overlap(this.zombies, newBullet, (bullet, zombie) => {
-      bullet.destroy();
-      zombie.hit += 1;
-
-      if (zombie.hit >= 3) {
-        this.zombies.killAndHide(zombie);
-        zombie.destroy();
-      }
-    });
+    this.physics.add.overlap(this.zombies, newBullet, (bullet, zombie) => this.attackToZombie(bullet, zombie));
     newBullet.setVelocityX(this.player.flipX ? -1500 : 1500);
-    this.time.delayedCall(450, () => {
+    const bulletSound = this.sound.add('gun');
+    bulletSound.play();
+    this.time.delayedCall(350, () => {
       this.playerAttacking = false;
     }, [], this);
+  }
+
+  attackToZombie(bullet, zombie) {
+    bullet.destroy();
+    zombie.hit += 1;
+    if (zombie.hit >= 3) {
+      const newScore = this.score + 1;
+      this.score = newScore;
+      this.scoreText.setText(`SCORE: ${newScore}`);
+
+      zombie.isDead = true;
+      const [first, second] = zombie.texture.key.split('_');
+      zombie.setVelocity(0,0);
+      this.playAnimation(zombie, `${first}_${second}_death_anim`);
+      this.time.delayedCall(500, () => {
+        this.zombies.killAndHide(zombie);
+        zombie.destroy();
+      });
+    }
   }
 
   attackToHuman(sprite, key) {
@@ -225,7 +244,11 @@ export default class Scene extends Phaser.Scene {
     else if (!this.isJumping && !this.isRunning) {
       this.playAnimation(this.player,'player_hurt_anim');
     }
-    this.playAnimation(sprite, `${key}_anim`);
+    if (sprite.isDead) {
+      this.playAnimation(sprite, `${key}_death_anim`);
+    } else {
+      this.playAnimation(sprite, `${key}_attack_anim`);
+    }
 
     // moving the mask
     this.healthMask.x -= 0.5;
@@ -411,13 +434,14 @@ export default class Scene extends Phaser.Scene {
 
   showInitialDialog() {
     this.text.setVisible(true);
-    setTimeout(() => {
+    this.time.delayedCall(200, () => {
       this.text.setText('¡Debo encontrarlos, cueste lo que cueste!');
-    }, 200);
-    setTimeout(() => {
+    });
+    this.time.delayedCall(200, () => {
       this.isInitialState = false;
       this.text.setVisible(false);
-    }, 200);
+      this.scoreText.setVisible(true);
+    });
   }
 
   setupControls() {
@@ -508,12 +532,17 @@ export default class Scene extends Phaser.Scene {
     failSound.play();
     deadBody.play();
     setTimeout(() => {
+      const bestScore = Number(localStorage.getItem('best_score')) || 0;
+      if (this.score > bestScore) {
+        localStorage.setItem('best_score', this.score);
+      }
+      localStorage.setItem('actual_score', this.score);
       this.isInitialState = true;
       this.isBeingAttacked = false;
       this.isGameOver = false;
       this.score = 0;
       this.isJumping = false;
-      this.scene.restart();
+      this.scene.start('gameover');
     }, 3500);
   }
 
@@ -521,7 +550,7 @@ export default class Scene extends Phaser.Scene {
     const playerPosition = this.player.body.position.x;
     const spritePosition = sprite.body.position.x;
     sprite.setFlipX(spritePosition > playerPosition) // If spritePosition is grather than playerPosition then is right side
-    this.physics.moveToObject(sprite, this.player, 100);
+    this.physics.moveToObject(sprite, this.player, 250);
     sprite.setVelocityY(0);
   }  
 

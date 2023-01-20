@@ -2,6 +2,7 @@
 
 import { WIDTH, HEIGHT } from "./src/constants/constants.js";
 import Scene from "./src/scenes/Scene.js";
+import SceneGameOver from "./src/scenes/SceneGameOver.js";
 
 var config = {
   type: Phaser.AUTO,
@@ -14,7 +15,7 @@ var config = {
       gravity: { y: 3000 }
     }
   },
-  scene: [Scene]
+  scene: [Scene, SceneGameOver]
 };
 
 new Phaser.Game(config);
