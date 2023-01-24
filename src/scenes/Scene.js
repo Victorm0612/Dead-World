@@ -273,7 +273,7 @@ export default class Scene extends Phaser.Scene {
     }
 
     // moving the mask
-    // this.healthMask.x -= 0.5;
+    this.healthMask.x -= 0.5;
   }
 
   initializeSounds() {
