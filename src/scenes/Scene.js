@@ -206,7 +206,7 @@ export default class Scene extends Phaser.Scene {
       newZombie
         .setScale(startFinalState ? 3 : 2)
         .setFlipX(true);
-      newZombie.hit = startFinalState ? -16 : 0;
+      newZombie.hit = startFinalState ? -10 : 0;
       newZombie.isDead = false;
       this.playAnimation(newZombie, `${zombies[zombieSelected]}_walk_anim`, true);
       this.physics.add.collider(newZombie, this.floor);
@@ -273,7 +273,7 @@ export default class Scene extends Phaser.Scene {
     }
 
     // moving the mask
-    this.healthMask.x -= 0.5;
+    this.healthMask.x -= 0.3;
   }
 
   initializeSounds() {
@@ -611,7 +611,7 @@ export default class Scene extends Phaser.Scene {
     const playerPosition = this.player.body.position.x;
     const spritePosition = sprite.body.position.x;
     sprite.setFlipX(spritePosition > playerPosition) // If spritePosition is grather than playerPosition then is right side
-    this.physics.moveToObject(sprite, this.player, this.isFinalState ? 100 : 250);
+    this.physics.moveToObject(sprite, this.player, this.isFinalState ? 70 : 250);
     sprite.setVelocityY(0);
   }  
 
