@@ -8,6 +8,7 @@ export default class Scene extends Phaser.Scene {
     this.score = 0;
     this.isGameOver = false;
     this.isInitialState = true;
+    this.isFinalState = false;
     this.isJumping = false;
     this.playerAttacking = false;
     this.isBeingAttacked = false;
@@ -17,6 +18,7 @@ export default class Scene extends Phaser.Scene {
 
     // Background
     this.load.image('background', 'assets/img/background/War2/Bright/War2.png');
+    this.load.image('background_win', 'assets/img/background/Winner/Ending.png');
     this.load.image('floor', 'assets/img/background/War2/Bright/road.png');
 
     // Bullet
@@ -25,6 +27,9 @@ export default class Scene extends Phaser.Scene {
     //HUD
     this.load.image('health_container', 'assets/img/hud/health_bar_empty.png');
     this.load.image('health_bar', 'assets/img/hud/health_bar_fully.png');
+
+    this.load.image('progress_container', 'assets/img/hud/progress_bar_empty.png');
+    this.load.image('progress_bar', 'assets/img/hud/progress_bar_full.png');
 
     // Main character
 
@@ -100,7 +105,7 @@ export default class Scene extends Phaser.Scene {
     // Set controls
     this.cursors = this.input.keyboard.createCursorKeys();
     this.input.keyboard.on('keydown', (event) => {
-      if (event.keyCode === 88 && !this.playerAttacking) {
+      if (event.keyCode === 88 && !this.playerAttacking && !this.isGameOver && !this.winner) {
         this.shootGun();
         this.playerAttacking = true;
       }
@@ -157,6 +162,17 @@ export default class Scene extends Phaser.Scene {
     if(this.healthMask.x <= 685 && !this.isGameOver) {
       return this.gameOver();
     }
+    if(this.progressBar.y <= 230 && !this.isFinalState) {
+      const snd = this.sound.add('zombie_boss');
+      snd.play();
+      this.progressBar.y = 230;
+      this.isFinalState = true;
+      this.time.delayedCall(3000, this.generateZombies(true));
+    }
+    if (this.isFinalState && !this.zombies.children.entries.length) {
+      this.winner = true;
+      return this.win();
+    }
     this.setupControls();
     
     this.isBeingAttacked = this.zombies.children.entries.some((zombie) => {
@@ -178,25 +194,28 @@ export default class Scene extends Phaser.Scene {
     });
   }
 
-  generateZombies() {
+  generateZombies(startFinalState) {
     const zombies = [...ZOMBIES];
     // group size
-    const size = Phaser.Math.Between(1, 5);
+    const size = startFinalState ? 1 : Phaser.Math.Between(1, 3);
     // time - how often they will come out?
-    const time = Phaser.Math.Between(3000, 4000);
+    const time = Phaser.Math.Between(4000, 6000);
     for (let i = 0; i < size; i++) {
-      const zombieSelected = Phaser.Math.Between(0, 2);
-      const newZombie = this.zombies.create(WIDTH + 70 + (i*300) , 467, `${zombies[zombieSelected]}_walk`);
+      const zombieSelected = startFinalState ? 0 : Phaser.Math.Between(0, 2);
+      const newZombie = this.zombies.create(WIDTH + 70 + (i*300), startFinalState ? 420 : 467, `${zombies[zombieSelected]}_walk`);
       newZombie
-        .setScale(2)
+        .setScale(startFinalState ? 3 : 2)
         .setFlipX(true);
-      newZombie.hit = 0;
+      newZombie.hit = startFinalState ? -10 : 0;
       newZombie.isDead = false;
       this.playAnimation(newZombie, `${zombies[zombieSelected]}_walk_anim`, true);
       this.physics.add.collider(newZombie, this.floor);
       this.physics.add.overlap(this.player, newZombie, () => this.attackToHuman(newZombie, zombies[zombieSelected]), null, this);  
     }
-    this.time.delayedCall(time, this.generateZombies, [], this);
+    this.time.delayedCall(time, () => {
+      if(this.isInitialState || this.isGameOver || this.isFinalState) return;
+      this.generateZombies(false);
+    }, [], this);
   }
 
   shootGun() {
@@ -223,6 +242,9 @@ export default class Scene extends Phaser.Scene {
       this.score = newScore;
       this.scoreText.setText(`SCORE: ${newScore}`);
 
+      // moving the mask
+      if (!this.isFinalState) this.progressBar.y -= 60;
+
       zombie.isDead = true;
       const [first, second] = zombie.texture.key.split('_');
       zombie.setVelocity(0,0);
@@ -235,7 +257,7 @@ export default class Scene extends Phaser.Scene {
   }
 
   attackToHuman(sprite, key) {
-    if(this.isGameOver) return;
+    if(this.isGameOver && !this.winner) return;
     sprite.setVelocityX(0);
     if (this.playerAttacking && !this.isRunning && !this.isJumping) {
       this.player.setVelocity(0,0);
@@ -251,7 +273,7 @@ export default class Scene extends Phaser.Scene {
     }
 
     // moving the mask
-    this.healthMask.x -= 0.5;
+    this.healthMask.x -= 0.3;
   }
 
   initializeSounds() {
@@ -267,6 +289,8 @@ export default class Scene extends Phaser.Scene {
   createSprites() {
     // Set background
     this.background = this.add.sprite(WIDTH / 2, 320, 'background');
+    this.backgroundWin = this.add.sprite(WIDTH / 2, 320, 'background_win');
+    this.backgroundWin.setAlpha(0);
 
     // Bullets
     this.bullets = this.physics.add.group();
@@ -281,6 +305,13 @@ export default class Scene extends Phaser.Scene {
 
     this.healthMask.visible = false;
     this.healthBar.mask = new Phaser.Display.Masks.BitmapMask(this, this.healthMask);
+
+    this.progressContainer = this.add.sprite(WIDTH - 40, 230, 'progress_container');
+    this.progressBar = this.add.sprite(this.progressContainer.x, this.progressContainer.y + 202, 'progress_bar');
+    this.progressMask = this.add.sprite(this.progressBar.x, this.progressContainer.y, 'progress_bar');    
+
+    this.progressMask.visible = false;
+    this.progressBar.mask = new Phaser.Display.Masks.BitmapMask(this, this.progressMask);
     
     // Floor
     this.floorImg = this.add.tileSprite(WIDTH / 2,  HEIGHT - 45, 0, 0, 'floor');
@@ -406,6 +437,10 @@ export default class Scene extends Phaser.Scene {
     this.healthBar.setScale(.5);
     this.healthMask.setScale(.5);
 
+    this.progressContainer.setScale(.3);
+    this.progressBar.setScale(.3);
+    this.progressMask.setScale(1, .3);
+
     // Floor
     this.floorImg.setScale(.5);
     this.floor
@@ -414,6 +449,8 @@ export default class Scene extends Phaser.Scene {
       .body
       .setAllowGravity(false)
       .setImmovable(true);
+
+    this.floor.body.setSize(100000000000000);
 
     // Player
     this.player
@@ -453,13 +490,13 @@ export default class Scene extends Phaser.Scene {
         this.playAnimation(this.player, 'player_stop_anim', true);
       }
     }
-    else if (this.cursors.up.isDown && !this.isGameOver) {
+    else if (this.cursors.up.isDown && !this.isGameOver && !this.winner) {
       this.jump();
     }
-    else if (this.cursors.left.isDown && !this.isGameOver) {
+    else if (this.cursors.left.isDown && !this.isGameOver && !this.winner) {
       this.run();
     }
-    else if (this.cursors.right.isDown && !this.isGameOver) {
+    else if (this.cursors.right.isDown && !this.isGameOver && !this.winner) {
       this.run(false);
     }
     else {
@@ -511,6 +548,30 @@ export default class Scene extends Phaser.Scene {
       }
     }
   }
+
+  win() {
+    this.playerAttacking = false;
+    this.isJumping = false;
+    this.isBeingAttacked = false;
+    this.text.setText('Debo seguir buscando...');
+    this.scoreText.setVisible(false);
+    this.text.setVisible(true);
+    this.time.delayedCall(1000, () => {
+      this.text.setVisible(false);
+    });
+    this.time.delayedCall(1500, () => {
+      this.playAnimation(this.player, 'player_walk_anim');
+      this.player.setCollideWorldBounds(false);
+      this.player.setVelocityX(300);
+    });
+    this.time.delayedCall(2500, () => {
+      // Set background
+      const bestScore = Number(localStorage.getItem('best_score')) || 0;
+      const actualScore = this.score;
+      this.bestScoreText = this.add.text(WIDTH - 580, 380, `Best Score: ${bestScore} \n\nActual score: ${actualScore}`, { font: '24px PixelGameFont, monospace' });
+      this.backgroundWin.setAlpha(1);
+    });
+  }
   
   gameOver() {
     this.isGameOver = true;
@@ -550,7 +611,7 @@ export default class Scene extends Phaser.Scene {
     const playerPosition = this.player.body.position.x;
     const spritePosition = sprite.body.position.x;
     sprite.setFlipX(spritePosition > playerPosition) // If spritePosition is grather than playerPosition then is right side
-    this.physics.moveToObject(sprite, this.player, 250);
+    this.physics.moveToObject(sprite, this.player, this.isFinalState ? 70 : 250);
     sprite.setVelocityY(0);
   }  
 
