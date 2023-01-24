@@ -105,7 +105,7 @@ export default class Scene extends Phaser.Scene {
     // Set controls
     this.cursors = this.input.keyboard.createCursorKeys();
     this.input.keyboard.on('keydown', (event) => {
-      if (event.keyCode === 88 && !this.playerAttacking && !this.isGameOver && !this.winner) {
+      if (event.keyCode === 88 && !this.isInitialState && !this.playerAttacking && !this.isGameOver && !this.winner) {
         this.shootGun();
         this.playerAttacking = true;
       }
@@ -237,13 +237,13 @@ export default class Scene extends Phaser.Scene {
   attackToZombie(bullet, zombie) {
     bullet.destroy();
     zombie.hit += 1;
-    if (zombie.hit >= 3) {
+    if (zombie.hit === 3) {
       const newScore = this.score + 1;
       this.score = newScore;
       this.scoreText.setText(`SCORE: ${newScore}`);
 
       // moving the mask
-      if (!this.isFinalState) this.progressBar.y -= 60;
+      if (!this.isFinalState) this.progressBar.y -= 15;
 
       zombie.isDead = true;
       const [first, second] = zombie.texture.key.split('_');
@@ -471,10 +471,10 @@ export default class Scene extends Phaser.Scene {
 
   showInitialDialog() {
     this.text.setVisible(true);
-    this.time.delayedCall(200, () => {
+    this.time.delayedCall(2000, () => {
       this.text.setText('¡Debo encontrarlos, cueste lo que cueste!');
     });
-    this.time.delayedCall(200, () => {
+    this.time.delayedCall(3500, () => {
       this.isInitialState = false;
       this.text.setVisible(false);
       this.scoreText.setVisible(true);
@@ -560,6 +560,7 @@ export default class Scene extends Phaser.Scene {
       this.text.setVisible(false);
     });
     this.time.delayedCall(1500, () => {
+      if (this.player.flipX) this.player.setFlipX(false);
       this.playAnimation(this.player, 'player_walk_anim');
       this.player.setCollideWorldBounds(false);
       this.player.setVelocityX(300);
